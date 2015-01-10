@@ -87,8 +87,14 @@ action :build do
       opt.write_file
     end
 
+    if new_resource.skippgpcheck
+      skippgpcheck = ' --skippgpcheck'
+    else
+      ''
+    end
+
     Chef::Log.debug("Building package #{new_resource.name}")
-    em = execute "makepkg -s --noconfirm" do
+    em = execute "makepkg -s --noconfirm #{skippgpcheck}" do
       cwd ::File.join(new_resource.builddir, new_resource.name)
       creates aurfile
       user node[:pacman][:build_user]
