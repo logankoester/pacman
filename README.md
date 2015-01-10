@@ -45,6 +45,7 @@ Use the `pacman_aur` resource to install packages from ArchLinux's AUR repositor
 * options - pass arbitrary options to the pacman command.
 * `pkgbuild_src` - whether to use an included PKGBUILD file, put the PKGBUILD file in in the `files/default` directory.
 * patches - array of patch names, as files in `files/default` that should be applied for the package.
+* skippgpcheck - optional, pass the `--skippgpcheck` flag to `makepkg`
 
 http://aur.archlinux.org/
 
