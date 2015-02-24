@@ -1,3 +1,7 @@
+## v2.0.0:
+
+- Sets default pacman.build_user to nobody and removes --asroot option, which was removed from pacman in 4.2.0
+
 ## v1.1.1:
 
 - Added --noconfirm to to makepkg runs to not prompt on dependencies (thanks [dvolker](https://github.com/dvolker))
