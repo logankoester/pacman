@@ -30,8 +30,8 @@ action :build do
   unless ::File.exists?(aurfile)
     Chef::Log.debug("Creating build directory")
     d = directory new_resource.builddir do
-      owner node[:pacman][:build_user]
-      group node[:pacman][:build_user]
+      owner node['pacman']['build_user']
+      group node['pacman']['build_user']
       mode 0755
       action :nothing
     end
@@ -40,8 +40,8 @@ action :build do
     Chef::Log.debug("Retrieving source for #{new_resource.name}")
     r = remote_file "#{new_resource.builddir}/#{new_resource.name}.tar.gz" do
       source "https://aur.archlinux.org/cgit/aur.git/snapshot/#{new_resource.name}.tar.gz"
-      owner node[:pacman][:build_user]
-      group node[:pacman][:build_user]
+      owner node['pacman']['build_user']
+      group node['pacman']['build_user']
       mode 0644
       action :nothing
     end
@@ -50,8 +50,8 @@ action :build do
     Chef::Log.debug("Untarring source package for #{new_resource.name}")
     e = execute "tar -xf #{new_resource.name}.tar.gz" do
       cwd new_resource.builddir
-      user node[:pacman][:build_user]
-      group node[:pacman][:build_user]
+      user node['pacman']['build_user']
+      group node['pacman']['build_user']
       action :nothing
     end
     e.run_action(:run)
@@ -60,8 +60,8 @@ action :build do
       Chef::Log.debug("Replacing PKGBUILD with custom version")
       pkgb = cookbook_file "#{new_resource.builddir}/#{new_resource.name}/PKGBUILD" do
         source "PKGBUILD"
-        owner node[:pacman][:build_user]
-        group node[:pacman][:build_user]
+        owner node['pacman']['build_user']
+        group node['pacman']['build_user']
         mode 0644
         action :nothing
       end
@@ -97,8 +97,8 @@ action :build do
     em = execute "makepkg -s --noconfirm #{skippgpcheck}" do
       cwd ::File.join(new_resource.builddir, new_resource.name)
       creates aurfile
-      user node[:pacman][:build_user]
-      group node[:pacman][:build_user]
+      user node['pacman']['build_user']
+      group node['pacman']['build_user']
       action :nothing
     end
     em.run_action(:run)
