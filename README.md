@@ -15,8 +15,8 @@ ATTRIBUTES
 
 | Attribute                    | Default                                   | Description                                             |
 |------------------------------|-------------------------------------------|---------------------------------------------------------|
-| `node[:pacman][:build_dir]`  | `#{Chef:Config[:file_cache_path]}/builds` | The default directory where AUR packages will be built. |
-| `node[:pacman][:build_user]` | `nobody`                                    | The user that will build AUR packages.                  |
+| `node['pacman']['build_dir']`  | `#{Chef:Config[:file_cache_path]}/builds` | The default directory where AUR packages will be built. |
+| `node['pacman']['build_user']` | `nobody`                                    | The user that will build AUR packages.                  |
 
 RESOURCES
 =========
@@ -41,7 +41,7 @@ Use the `pacman_aur` resource to install packages from ArchLinux's AUR repositor
 ### Parameters:
 
 * version - hardcode a version
-* builddir - specify an alternate build directory, defaults to `node[:pacman][:build_dir]`.
+* builddir - specify an alternate build directory, defaults to `node['pacman']['build_dir']`.
 * options - pass arbitrary options to the pacman command.
 * `pkgbuild_src` - whether to use an included PKGBUILD file, put the PKGBUILD file in in the `files/default` directory.
 * patches - array of patch names, as files in `files/default` that should be applied for the package.
