@@ -17,7 +17,7 @@
 # limitations under the License.
 #
 
-actions :build, :install
+actions :build, :install, :sync
 
 default_action :install
 

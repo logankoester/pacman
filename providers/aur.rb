@@ -21,7 +21,7 @@ require 'chef/mixin/shell_out'
 require 'chef/mixin/language'
 include Chef::Mixin::ShellOut
 
-action :build do
+def build_aur node, new_resource
   get_pkg_version
   aurfile = "#{new_resource.builddir}/#{new_resource.name}/#{new_resource.name}-#{new_resource.version}.pkg.tar.xz"
   package_namespace = new_resource.name[0..1]
@@ -106,7 +106,7 @@ action :build do
   end
 end
 
-action :install do
+def install_aur new_resource
   get_pkg_version
 
   unless @aurpkg.exists && new_resource.version == @aurpkg.installed_version
@@ -114,6 +114,22 @@ action :install do
       command "pacman -U --noconfirm  --noprogressbar #{new_resource.builddir}/#{new_resource.name}/#{new_resource.name}-#{new_resource.version}.pkg.tar.xz"
     end
     new_resource.updated_by_last_action(true)
+  end
+end
+
+action :build do
+  build_aur node, new_resource
+end
+
+action :install do
+  install_aur new_resource
+end
+
+action :sync do
+  load_current_resource
+  unless @aurpkg.exists && new_resource.version == @aurpkg.installed_version
+    build_aur node, new_resource
+    install_aur new_resource
   end
 end
 
