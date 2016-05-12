@@ -23,7 +23,9 @@ default_action :install
 
 attribute :package_name, :name_attribute => true
 attribute :version, :default => nil
-attribute :builddir, :default => node[:pacman][:build_dir]
+attribute :build_dir, :default => node[:pacman][:build_dir]
+attribute :build_user, :default => node[:pacman][:build_user]
+attribute :build_group, :default => node[:pacman][:build_group]
 attribute :options, :kind_of => String
 attribute :pkgbuild_src, :default => false
 attribute :patches, :kind_of => Array, :default => []
