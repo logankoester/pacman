@@ -246,7 +246,12 @@ class Package
             {
                 :version => data[0].strip.split[1],
                 :arch => data[1].include?("any") ? "any" : @@default_arch,
-                :dependents => data[2].strip.split[1..-1],
+                :dependents => data[2].strip.split[1..-1].map do |dep|
+                    # TODO: This removes version constraints like the
+                    # apacman package does, in the future, try to follow
+                    # these constraints instead.
+                    dep.match(/[a-z0-9\-_.]+/)[0]
+                end,
             }
         else
             parsed = Package.shell("pacman -Si '#{name}'")
