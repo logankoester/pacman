@@ -29,6 +29,7 @@ attribute :build_group, :default => node[:pacman][:build_group]
 attribute :options, :kind_of => String
 attribute :pkgbuild_src, :default => false
 attribute :patches, :kind_of => Array, :default => []
+attribute :environment, :kind_of => Hash, :default => {}
 attribute :exists, :default => false
 attribute :installed_version, :default => nil
 attribute :skippgpcheck, :default => false

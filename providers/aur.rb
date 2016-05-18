@@ -105,6 +105,7 @@ def build_aur target, opts
         creates aurfile
         user opts.build_user
         group opts.build_group
+        environment opts.environment
         action :run
     end
 end
