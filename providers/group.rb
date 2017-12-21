@@ -19,7 +19,6 @@
 
 require 'chef/mixin/shell_out'
 require 'chef/mixin/language'
-include Chef::Mixin::Command
 include Chef::Mixin::ShellOut
 
 action :install do
@@ -41,8 +40,7 @@ action :remove do
 end
 
 def load_current_resource
-  @pmgroup = Chef::Resource::PacmanGroup.new(@new_resource.name)
-  @pmgroup.package_name(@new_resource.package_name)
+  @pmgroup = Chef::Resource.resource_for_node('pacman_group', node).new(@new_resource.name)
 
   Chef::Log.debug("Checking pacman for #{@new_resource.package_name}")
   p = shell_out("pacman -Qg #{@new_resource.package_name}")
