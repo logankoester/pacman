@@ -1,4 +1,4 @@
-[![Travis CI](https://travis-ci.org/jesseadams/pacman.png)](https://travis-ci.org/jesseadams/pacman)
+Adapted from https://github.com/jesseadams/pacman and forks by [logankoester](https://github.com/logankoester/) and [illegalprime](https://github.com/illegalprime).
 
 DESCRIPTION
 ===========

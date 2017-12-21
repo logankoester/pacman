@@ -136,18 +136,28 @@ def install_with_deps target, opts
 end
 
 action :build do
-    target = Package.aur new_resource.package_name
+    package_opts = {
+      name: new_resource.name,
+      build_dir: new_resource.build_dir,
+      build_user: new_resource.build_user,
+    }
+    target = Package.aur package_opts
     opts = new_resource
 
     Chef::Log.debug("Checking for #{aurfile_path target, opts.build_dir}")
-    if not already_built? target, build_dir
+    if not already_built? target, opts.build_dir
         build_aur target, opts
         new_resource.updated_by_last_action true
     end
 end
 
 action :install do
-    target = Package.aur new_resource.package_name
+    package_opts = {
+      name: new_resource.name,
+      build_dir: new_resource.build_dir,
+      build_user: new_resource.build_user,
+    }
+    target = Package.aur package_opts
     if not target.already_installed?
         install_aur target, new_resource
         new_resource.updated_by_last_action true
@@ -155,7 +165,12 @@ action :install do
 end
 
 action :sync do
-    target = Package.aur new_resource.package_name
+    package_opts = {
+      name: new_resource.name,
+      build_dir: new_resource.build_dir,
+      build_user: new_resource.build_user,
+    }
+    target = Package.aur package_opts
     if not target.already_installed?
         install_with_deps target, new_resource
         new_resource.updated_by_last_action true
@@ -163,27 +178,30 @@ action :sync do
 end
 
 class Package
-    attr_reader :name, :version, :arch, :dependents
+    attr_reader :build_dir, :build_user, :name, :version, :arch, :dependents
 
     @@version_arch_re = /Version +: ([\w.-]+).+Architecture +: (\w+)/m
     @@default_arch = RUBY_PLATFORM.split("-")[0]
 
-    def initialize name, is_aur
-        info = Package.fetch_latest_info name, is_aur
-        @name = name
+    def initialize opts, is_aur
+	@build_dir = opts[:build_dir]
+	@build_user = opts[:build_user]
+        @name = opts[:name]
+
+        info = fetch_latest_info(is_aur)
         @is_aur = is_aur
         @version = info[:version]
         @arch = info[:arch]
         @dependents = info[:dependents]
-        @installed = Package.installed_info name
+        @installed = installed_info name
     end
 
-    def self.aur name
-        Package.new name, true
+    def self.aur opts
+        Package.new opts, true
     end
 
-    def self.pacman name
-        Package.new name, false
+    def self.pacman opts
+        Package.new opts, false
     end
 
     def to_s
@@ -214,23 +232,23 @@ class Package
         AurDeps.new self
     end
 
-    private
-
-    def self.pkgbuild_url name
-        "https://aur.archlinux.org/cgit/aur.git/plain/PKGBUILD?h=#{name}"
-    end
-
-    def self.shell command
+    def shell command
         Mixlib::ShellOut.new(command,
-            :user => "nobody",
-            :group => "nobody",
-            :cwd => "/tmp",
+            :user => build_user,
+            :group => build_user,
+            :cwd => build_dir,
         ).run_command.stdout.strip
     end
 
-    def self.fetch_latest_info name, is_aur
+    private
+
+    def pkgbuild_url name
+        "https://aur.archlinux.org/cgit/aur.git/plain/PKGBUILD?h=#{name}"
+    end
+
+    def fetch_latest_info is_aur
         if is_aur
-            pkgbuild = open(Package.pkgbuild_url name).read
+	    pkgbuild = open(pkgbuild_url(name)).read
             command = <<-FIN
                 #{pkgbuild}
                 echo
@@ -239,10 +257,12 @@ class Package
                 echo depends ${depends[@]} ${makedepends[@]}
             FIN
             parser = Mixlib::ShellOut.new(command,
-                :user => "nobody",
-                :group => "nobody",
-                :cwd => "/tmp",
+                :user => build_user,
+                :group => build_user,
+		# TODO: create build_dir if does not exist
+                :cwd => build_dir,
                 :timeout => 1)
+	    # TODO: check exit code of command and raise err
             data = parser.run_command.stdout.strip.split("\n").last 3
             {
                 :version => data[0].strip.split[1],
@@ -255,7 +275,7 @@ class Package
                 end,
             }
         else
-            parsed = Package.shell("pacman -Si '#{name}'")
+          parsed = shell("pacman -Si '#{name}'")
                 .match(@@version_arch_re)
             if parsed && parsed.length == 3
                 {
@@ -268,9 +288,9 @@ class Package
         end
     end
 
-    def self.installed_info name
+    def installed_info name
         Chef::Log.debug("Checking pacman for #{name}")
-        parsed = Package.shell("pacman -Qi '#{name}'").match(@@version_arch_re)
+        parsed = shell("pacman -Qi '#{name}'").match(@@version_arch_re)
         if parsed && parsed.length == 3
             {
                 :version => parsed[1],
@@ -304,9 +324,9 @@ class AurDeps
         while not queue.empty?
             package = queue.shift
             dependents = package.dependents.map do |dependent|
-                found = Package.shell("pacman -Si #{dependent}").length != 0
+                found = package.shell("pacman -Si #{dependent}").length != 0
                 if !found
-                    out = Package.shell("pacman -Ssq '^#{dependent}$'")
+                    out = package.shell("pacman -Ssq '^#{dependent}$'")
                     providers = out.split "\n"
                     if providers.length != 0
                         # TODO: Support muliple providers
@@ -314,7 +334,12 @@ class AurDeps
                         found = true
                     end
                 end
-                Package.new dependent, !found
+		dep_opts = {
+                  name: dependent,
+		  build_dir: package.build_dir,
+		  build_user: package.build_user,
+		}
+                Package.new dep_opts, !found
             end
             deps[package] = dependents
             queue += dependents
