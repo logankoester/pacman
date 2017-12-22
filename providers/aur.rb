@@ -23,6 +23,16 @@ require 'tsort'
 require 'open-uri'
 include Chef::Mixin::ShellOut
 
+def create_build_dir_if_not_exists(build_dir, build_user)
+    dir = Chef::Resource.resource_for_node('directory', node).new(build_dir)
+    dir.owner(build_user)
+    dir.group(build_user)
+    dir.mode('0755')
+    dir.recursive(true)
+    provider = Chef::Provider::Directory.new(dir, run_context)
+    provider.run_action('create')
+end
+
 def aurfile_path target, build_dir
     target_build = ::File.join build_dir, target.name, target.name
     aurfiles = ::Dir["#{target_build}-*.pkg.tar.xz"]
@@ -40,15 +50,6 @@ end
 def build_aur target, opts
     pkgbuild = ::File.join opts.build_dir, target.name, "PKGBUILD"
     aurfile = aurfile_path target, opts.build_dir
-
-    Chef::Log.debug("Creating build directory")
-    directory "build_dir_#{target.name}" do
-        path opts.build_dir
-        owner opts.build_user
-        group opts.build_group
-        mode 0755
-        action :create
-    end
 
     Chef::Log.debug("Retrieving source for #{target.name}")
     remote_file ::File.join opts.build_dir, "#{target.name}.tar.gz" do
@@ -136,6 +137,8 @@ def install_with_deps target, opts
 end
 
 action :build do
+    create_build_dir_if_not_exists(new_resource.build_dir, new_resource.build_user)
+
     package_opts = {
       name: new_resource.name,
       build_dir: new_resource.build_dir,
@@ -152,12 +155,15 @@ action :build do
 end
 
 action :install do
+    create_build_dir_if_not_exists(new_resource.build_dir, new_resource.build_user)
+
     package_opts = {
       name: new_resource.name,
       build_dir: new_resource.build_dir,
       build_user: new_resource.build_user,
     }
     target = Package.aur package_opts
+
     if not target.already_installed?
         install_aur target, new_resource
         new_resource.updated_by_last_action true
@@ -165,12 +171,15 @@ action :install do
 end
 
 action :sync do
+    create_build_dir_if_not_exists(new_resource.build_dir, new_resource.build_user)
+
     package_opts = {
       name: new_resource.name,
       build_dir: new_resource.build_dir,
       build_user: new_resource.build_user,
     }
     target = Package.aur package_opts
+
     if not target.already_installed?
         install_with_deps target, new_resource
         new_resource.updated_by_last_action true
@@ -233,11 +242,13 @@ class Package
     end
 
     def shell command
-        Mixlib::ShellOut.new(command,
+        cmd = Mixlib::ShellOut.new(command,
             :user => build_user,
             :group => build_user,
             :cwd => build_dir,
-        ).run_command.stdout.strip
+        ).run_command
+        cmd.error!
+        cmd.stdout.strip
     end
 
     private
@@ -259,11 +270,11 @@ class Package
             parser = Mixlib::ShellOut.new(command,
                 :user => build_user,
                 :group => build_user,
-		# TODO: create build_dir if does not exist
                 :cwd => build_dir,
-                :timeout => 1)
-	    # TODO: check exit code of command and raise err
-            data = parser.run_command.stdout.strip.split("\n").last 3
+		:timeout => 1).run_command
+	    parser.error!
+
+            data = parser.stdout.strip.split("\n").last 3
             {
                 :version => data[0].strip.split[1],
                 :arch => data[1].include?("any") ? "any" : @@default_arch,
