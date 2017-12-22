@@ -20,3 +20,5 @@
 default['pacman']['build_dir'] = '/tmp/chef-pacman-builds'
 default['pacman']['build_user'] = 'nobody'
 default['pacman']['build_group'] = 'nobody'
+default['pacman']['install_user'] = 'root'
+default['pacman']['install_group'] = 'root'

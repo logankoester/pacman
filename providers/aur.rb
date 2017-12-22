@@ -101,7 +101,7 @@ def build_aur target, opts
 
     Chef::Log.debug("Building package #{target.name}")
     execute "makepkg #{target.name}" do
-        command "makepkg -sf --noconfirm#{skippgpcheck}"
+        command "makepkg -f --noconfirm#{skippgpcheck}"
         cwd ::File.join opts.build_dir, target.name
         creates aurfile
         user opts.build_user
@@ -117,6 +117,8 @@ def install_aur target, opts
             aurfile = aurfile_path target, opts.build_dir
             "pacman -U --noconfirm  --noprogressbar #{aurfile}"
         }
+	user opts.install_user
+	group opts.install_user
     end
 end
 
@@ -143,6 +145,7 @@ action :build do
       name: new_resource.name,
       build_dir: new_resource.build_dir,
       build_user: new_resource.build_user,
+      install_user: new_resource.install_user,
     }
     target = Package.aur package_opts
     opts = new_resource
@@ -161,6 +164,7 @@ action :install do
       name: new_resource.name,
       build_dir: new_resource.build_dir,
       build_user: new_resource.build_user,
+      install_user: new_resource.install_user,
     }
     target = Package.aur package_opts
 
@@ -177,6 +181,7 @@ action :sync do
       name: new_resource.name,
       build_dir: new_resource.build_dir,
       build_user: new_resource.build_user,
+      install_user: new_resource.install_user,
     }
     target = Package.aur package_opts
 
@@ -187,7 +192,7 @@ action :sync do
 end
 
 class Package
-    attr_reader :build_dir, :build_user, :name, :version, :arch, :dependents
+    attr_reader :build_dir, :build_user, :install_user, :name, :version, :arch, :dependents
 
     @@version_arch_re = /Version +: ([\w.-]+).+Architecture +: (\w+)/m
     @@default_arch = RUBY_PLATFORM.split("-")[0]
@@ -195,6 +200,7 @@ class Package
     def initialize opts, is_aur
 	@build_dir = opts[:build_dir]
 	@build_user = opts[:build_user]
+	@install_user = opts[:install_user]
         @name = opts[:name]
 
         info = fetch_latest_info(is_aur)
@@ -241,10 +247,20 @@ class Package
         AurDeps.new self
     end
 
-    def shell command
+    def shell_build_user command
         cmd = Mixlib::ShellOut.new(command,
             :user => build_user,
             :group => build_user,
+            :cwd => build_dir,
+        ).run_command
+        cmd.error!
+        cmd.stdout.strip
+    end
+
+    def shell_install_user command
+        cmd = Mixlib::ShellOut.new(command,
+            :user => install_user,
+            :group => install_user,
             :cwd => build_dir,
         ).run_command
         cmd.error!
@@ -267,14 +283,7 @@ class Package
                 echo arch ${arch}
                 echo depends ${depends[@]} ${makedepends[@]}
             FIN
-            parser = Mixlib::ShellOut.new(command,
-                :user => build_user,
-                :group => build_user,
-                :cwd => build_dir,
-		:timeout => 1).run_command
-	    parser.error!
-
-            data = parser.stdout.strip.split("\n").last 3
+            data = shell_build_user(command).split("\n").last 3
             {
                 :version => data[0].strip.split[1],
                 :arch => data[1].include?("any") ? "any" : @@default_arch,
@@ -286,7 +295,7 @@ class Package
                 end,
             }
         else
-          parsed = shell("pacman -Si '#{name}'")
+          parsed = shell_install_user("pacman -Si '#{name}'")
                 .match(@@version_arch_re)
             if parsed && parsed.length == 3
                 {
@@ -301,7 +310,7 @@ class Package
 
     def installed_info name
         Chef::Log.debug("Checking pacman for #{name}")
-        parsed = shell("pacman -Qi '#{name}'").match(@@version_arch_re)
+        parsed = shell_install_user("pacman -Qi '#{name}'").match(@@version_arch_re)
         if parsed && parsed.length == 3
             {
                 :version => parsed[1],
@@ -335,9 +344,9 @@ class AurDeps
         while not queue.empty?
             package = queue.shift
             dependents = package.dependents.map do |dependent|
-                found = package.shell("pacman -Si #{dependent}").length != 0
+                found = package.shell_install_user("pacman -Si #{dependent}").length != 0
                 if !found
-                    out = package.shell("pacman -Ssq '^#{dependent}$'")
+                    out = package.shell_install_user("pacman -Ssq '^#{dependent}$'")
                     providers = out.split "\n"
                     if providers.length != 0
                         # TODO: Support muliple providers
