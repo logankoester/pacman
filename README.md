@@ -15,8 +15,9 @@ ATTRIBUTES
 
 | Attribute                    | Default                                   | Description                                             |
 |------------------------------|-------------------------------------------|---------------------------------------------------------|
-| `node['pacman']['build_dir']`  | `/tmp/chef-pacman-builds`               | The default directory where AUR packages will be built. |
-| `node['pacman']['build_user']` | `nobody`                                | The user that will build AUR packages.                  |
+| `node['pacman']['build_dir']`    | `/tmp/chef-pacman-builds`               | The default directory where AUR packages will be built. |
+| `node['pacman']['build_user']`   | `nobody`                                | The user that will build AUR packages.                  |
+| `node['pacman']['install_user']` | `root`                                  | The user that will install AUR and pacman packages.     |
 
 RESOURCES
 =========
@@ -35,15 +36,16 @@ Use the `pacman_aur` resource to install packages from ArchLinux's AUR repositor
 
 ### Actions:
 
-* :build - Builds the package.
-* :install - Installs the built package.
+* :install - Install deps, builds, then installs the AUR package.
 
 ### Parameters:
 
 * version - hardcode a version
-* builddir - specify an alternate build directory, defaults to `node['pacman']['build_dir']`.
+* build\_dir - specify an alternate build directory, defaults to `node['pacman']['build_dir']` if set or `/tmp/chef-pacman-builds`.
+* build\_user - specify an alternate user to run build commands, defaults to `node['pacman']['build_user']` if set or `nobody`.
+* install\_user - specify an alternate user to run install commands, defaults to `node['pacman']['install_user']` if set or `root`.
 * options - pass arbitrary options to the pacman command.
-* `pkgbuild_src` - whether to use an included PKGBUILD file, put the PKGBUILD file in in the `files/default` directory.
+* pkgbuild\_src - whether to use an included PKGBUILD file, put the PKGBUILD file in in the `files/default` directory.
 * patches - array of patch names, as files in `files/default` that should be applied for the package.
 * skippgpcheck - optional, pass the `--skippgpcheck` flag to `makepkg`
 

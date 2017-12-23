@@ -24,6 +24,7 @@ require 'open-uri'
 include Chef::Mixin::ShellOut
 
 def create_build_dir_if_not_exists(build_dir, build_user)
+    # TODO: can we use the built-in resource here?
     dir = Chef::Resource.resource_for_node('directory', node).new(build_dir)
     dir.owner(build_user)
     dir.group(build_user)
@@ -138,43 +139,7 @@ def install_with_deps target, opts
     end
 end
 
-action :build do
-    create_build_dir_if_not_exists(new_resource.build_dir, new_resource.build_user)
-
-    package_opts = {
-      name: new_resource.name,
-      build_dir: new_resource.build_dir,
-      build_user: new_resource.build_user,
-      install_user: new_resource.install_user,
-    }
-    target = Package.aur package_opts
-    opts = new_resource
-
-    Chef::Log.debug("Checking for #{aurfile_path target, opts.build_dir}")
-    if not already_built? target, opts.build_dir
-        build_aur target, opts
-        new_resource.updated_by_last_action true
-    end
-end
-
 action :install do
-    create_build_dir_if_not_exists(new_resource.build_dir, new_resource.build_user)
-
-    package_opts = {
-      name: new_resource.name,
-      build_dir: new_resource.build_dir,
-      build_user: new_resource.build_user,
-      install_user: new_resource.install_user,
-    }
-    target = Package.aur package_opts
-
-    if not target.already_installed?
-        install_aur target, new_resource
-        new_resource.updated_by_last_action true
-    end
-end
-
-action :sync do
     create_build_dir_if_not_exists(new_resource.build_dir, new_resource.build_user)
 
     package_opts = {
@@ -247,23 +212,23 @@ class Package
         AurDeps.new self
     end
 
-    def shell_build_user command
+    def shell_build_user(command, allow_error=false)
         cmd = Mixlib::ShellOut.new(command,
             :user => build_user,
             :group => build_user,
             :cwd => build_dir,
         ).run_command
-        cmd.error!
+        cmd.error! if !allow_error
         cmd.stdout.strip
     end
 
-    def shell_install_user command
+    def shell_install_user(command, allow_error=false)
         cmd = Mixlib::ShellOut.new(command,
             :user => install_user,
             :group => install_user,
             :cwd => build_dir,
         ).run_command
-        cmd.error!
+        cmd.error! if !allow_error
         cmd.stdout.strip
     end
 
@@ -297,6 +262,7 @@ class Package
         else
           parsed = shell_install_user("pacman -Si '#{name}'")
                 .match(@@version_arch_re)
+	    # TODO: raise error if length != 3
             if parsed && parsed.length == 3
                 {
                     :version => parsed[1],
@@ -310,7 +276,7 @@ class Package
 
     def installed_info name
         Chef::Log.debug("Checking pacman for #{name}")
-        parsed = shell_install_user("pacman -Qi '#{name}'").match(@@version_arch_re)
+        parsed = shell_install_user("pacman -Qi '#{name}'", true).match(@@version_arch_re)
         if parsed && parsed.length == 3
             {
                 :version => parsed[1],
@@ -344,9 +310,9 @@ class AurDeps
         while not queue.empty?
             package = queue.shift
             dependents = package.dependents.map do |dependent|
-                found = package.shell_install_user("pacman -Si #{dependent}").length != 0
+                found = package.shell_install_user("pacman -Si #{dependent}", true).length != 0
                 if !found
-                    out = package.shell_install_user("pacman -Ssq '^#{dependent}$'")
+                    out = package.shell_install_user("pacman -Ssq '^#{dependent}$'", true)
                     providers = out.split "\n"
                     if providers.length != 0
                         # TODO: Support muliple providers
