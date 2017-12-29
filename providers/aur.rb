@@ -240,7 +240,9 @@ class Package
 
     def fetch_latest_info is_aur
         if is_aur
-	    pkgbuild = open(pkgbuild_url(name)).read
+            pkgbuild_download_url = pkgbuild_url(name)
+            Chef::Log.debug("Downloading PKGBUILD from #{pkgbuild_download_url}...")
+            pkgbuild = open(pkgbuild_download_url).read
             command = <<-FIN
                 #{pkgbuild}
                 echo
