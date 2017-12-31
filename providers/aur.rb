@@ -69,25 +69,14 @@ def build_aur target, opts
         action :run
     end
 
-    if opts.pkgbuild_src
-        Chef::Log.debug("Replacing PKGBUILD with custom version")
-        cookbook_file pkgbuild do
-            source "PKGBUILD"
+    if opts.pkgbuild_src[target.name]
+        Chef::Log.debug("Replacing PKGBUILD of #{target.name} with custom version")
+        template pkgbuild do
+            source opts.pkgbuild_src[target.name]
             owner opts.build_user
             group opts.build_group
             mode 0644
             action :create
-        end
-    end
-
-    if opts.patches.length > 0
-        Chef::Log.debug("Adding new patches")
-        opts.patches.each do |patch|
-            cookbook_file ::File.join opts.build_dir, target.name, patch do
-                source patch
-                mode 0644
-                action :create
-            end
         end
     end
 
@@ -157,6 +146,7 @@ action :install do
       build_dir: new_resource.build_dir,
       build_user: new_resource.build_user,
       install_user: new_resource.install_user,
+      pkgbuild_src: new_resource.pkgbuild_src,
     }
     target = Package.aur package_opts
 
@@ -167,7 +157,7 @@ action :install do
 end
 
 class Package
-    attr_reader :build_dir, :build_user, :install_user, :name, :version, :arch, :dependents
+    attr_reader :build_dir, :build_user, :install_user, :pkgbuild_src, :name, :version, :arch, :dependents
 
     @@version_arch_re = /Version +: ([\w.-]+).+Architecture +: (\w+)/m
     @@default_arch = RUBY_PLATFORM.split("-")[0]
@@ -176,6 +166,7 @@ class Package
 	@build_dir = opts[:build_dir]
 	@build_user = opts[:build_user]
 	@install_user = opts[:install_user]
+	@pkgbuild_src = opts[:pkgbuild_src]
         @name = opts[:name]
 
         info = fetch_latest_info(is_aur)
@@ -194,8 +185,8 @@ class Package
         Package.new opts, false
     end
 
-    def self.exists_in_aur name
-        uri = URI.parse(self.pkgbuild_url(name))
+    def exists_in_aur
+        uri = URI.parse(pkgbuild_url(name))
         http = Net::HTTP.new(uri.host, uri.port)
         http.use_ssl = true
         request = Net::HTTP::Get.new(uri.request_uri)
@@ -209,10 +200,6 @@ class Package
         else
             raise "Unexpected response while checking for existance of #{name} in AUR: #{result.body}"
         end
-    end
-
-    def self.pkgbuild_url name
-        "https://aur.archlinux.org/cgit/aur.git/plain/PKGBUILD?h=#{name}"
     end
 
     def to_s
@@ -271,9 +258,13 @@ class Package
 
     private
 
+    def pkgbuild_url name
+        "https://aur.archlinux.org/cgit/aur.git/plain/PKGBUILD?h=#{name}"
+    end
+
     def fetch_latest_info is_aur
         if is_aur
-            pkgbuild_download_url = Package.pkgbuild_url(name)
+            pkgbuild_download_url = pkgbuild_url(name)
             Chef::Log.debug("Downloading PKGBUILD from #{pkgbuild_download_url}...")
             pkgbuild = open(pkgbuild_download_url).read
             command = <<-FIN
@@ -356,16 +347,19 @@ class AurDeps
                     end
                 end
 
-                if !is_pacman_pkg && !Package.exists_in_aur(dependent)
-                    raise "Could not find package #{dependent} in either pacman repos or AUR"
-                end
-
 		dep_opts = {
                   name: dependent,
 		  build_dir: package.build_dir,
 		  build_user: package.build_user,
+                  install_user: package.install_user,
+                  pkgbuild_src: package.pkgbuild_src,
 		}
-                Package.new dep_opts, !is_pacman_pkg
+                pkg = Package.new dep_opts, !is_pacman_pkg
+                if !is_pacman_pkg && !pkg.exists_in_aur
+                    raise "Could not find package #{dependent} in either pacman repos or AUR"
+                end
+
+                pkg
             end
             deps[package] = dependents
             queue += dependents
