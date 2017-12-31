@@ -184,6 +184,27 @@ class Package
         Package.new opts, false
     end
 
+    def self.exists_in_aur name
+        uri = URI.parse(self.pkgbuild_url(name))
+        http = Net::HTTP.new(uri.host, uri.port)
+        http.use_ssl = true
+        request = Net::HTTP::Get.new(uri.request_uri)
+        result = http.request(request)
+
+        http_code = result.code.to_i
+        if http_code >= 200 && http_code < 300
+            true
+        elsif http_code == 404
+            false
+        else
+            raise "Unexpected response while checking for existance of #{name} in AUR: #{result.body}"
+        end
+    end
+
+    def self.pkgbuild_url name
+        "https://aur.archlinux.org/cgit/aur.git/plain/PKGBUILD?h=#{name}"
+    end
+
     def to_s
         if @is_aur
             "Aur(#{@name}-#{@version})"
@@ -234,13 +255,9 @@ class Package
 
     private
 
-    def pkgbuild_url name
-        "https://aur.archlinux.org/cgit/aur.git/plain/PKGBUILD?h=#{name}"
-    end
-
     def fetch_latest_info is_aur
         if is_aur
-            pkgbuild_download_url = pkgbuild_url(name)
+            pkgbuild_download_url = Package.pkgbuild_url(name)
             Chef::Log.debug("Downloading PKGBUILD from #{pkgbuild_download_url}...")
             pkgbuild = open(pkgbuild_download_url).read
             command = <<-FIN
@@ -312,22 +329,27 @@ class AurDeps
         while not queue.empty?
             package = queue.shift
             dependents = package.dependents.map do |dependent|
-                found = package.shell_install_user("pacman -Si #{dependent}", true).length != 0
-                if !found
+                is_pacman_pkg = package.shell_install_user("pacman -Si #{dependent}", true).length != 0
+                if !is_pacman_pkg
                     out = package.shell_install_user("pacman -Ssq '^#{dependent}$'", true)
                     providers = out.split "\n"
                     if providers.length != 0
                         # TODO: Support muliple providers
                         dependent = providers[0]
-                        found = true
+                        is_pacman_pkg = true
                     end
                 end
+
+                if !is_pacman_pkg && !Package.exists_in_aur(dependent)
+                    raise "Could not find package #{dependent} in either pacman repos or AUR"
+                end
+
 		dep_opts = {
                   name: dependent,
 		  build_dir: package.build_dir,
 		  build_user: package.build_user,
 		}
-                Package.new dep_opts, !found
+                Package.new dep_opts, !is_pacman_pkg
             end
             deps[package] = dependents
             queue += dependents
