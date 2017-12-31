@@ -107,7 +107,7 @@ def build_aur target, opts
         creates aurfile
         user opts.build_user
         group opts.build_group
-        environment opts.environment
+        environment({ 'GNUPGHOME' => opts.build_dir }.merge(opts.environment))
         action :run
     end
 end
@@ -141,6 +141,16 @@ end
 
 action :install do
     create_build_dir_if_not_exists(new_resource.build_dir, new_resource.build_user)
+
+    new_resource.gpg_key_ids.each do |key|
+        execute 'import-key' do
+            user new_resource.build_user
+            command "gpg --recv-key #{key}"
+            environment({
+                'GNUPGHOME' => new_resource.build_dir,
+            })
+        end
+    end
 
     package_opts = {
       name: new_resource.name,
@@ -238,6 +248,9 @@ class Package
             :user => build_user,
             :group => build_user,
             :cwd => build_dir,
+            :environment => {
+                'GNUPGHOME' => build_dir,
+            },
         ).run_command
         cmd.error! if !allow_error
         cmd.stdout.strip
@@ -248,6 +261,9 @@ class Package
             :user => install_user,
             :group => install_user,
             :cwd => build_dir,
+            :environment => {
+                'GNUPGHOME' => build_dir,
+            },
         ).run_command
         cmd.error! if !allow_error
         cmd.stdout.strip

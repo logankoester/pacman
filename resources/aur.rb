@@ -31,6 +31,7 @@ attribute :install_group, :default => node[:pacman][:install_group]
 attribute :options, :kind_of => String
 attribute :pkgbuild_src, :default => false
 attribute :patches, :kind_of => Array, :default => []
+attribute :gpg_key_ids, :kind_of => Array, :default => []
 attribute :environment, :kind_of => Hash, :default => {}
 attribute :exists, :default => false
 attribute :installed_version, :default => nil
